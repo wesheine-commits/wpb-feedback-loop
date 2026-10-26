@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>WPB Feedback Loop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&display=swap">
+<style>
+/* Layout: one screen. Pick the Sunday, see the totals, tap your team to log it.
+   Celebration and get-better lists sit underneath. Logging is a single focused panel. */
+:root{
+  --bg:#f4f4f5; --surface:#ffffff; --ink:#444346; --strong:#2c2b2e; --muted:#7a787d; --line:#e4e3e6;
+  --red:#ab121c; --red-deep:#8a0e17; --red-soft:#f7e7e8; --good:#2f7d4f; --good-soft:#e7f3ec;
+  --font:"Gotham","Montserrat","Helvetica Neue",Arial,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--font)}
+[hidden]{display:none!important}
+img{max-width:100%}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.in{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{margin:0;color:var(--strong);text-wrap:balance}
+button{font-family:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--surface);border-bottom:1px solid var(--line)}
+.top .in{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px}
+.logo{height:26px;width:auto;display:block}
+.app{font:700 .72rem var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+main{padding-block:24px 64px}
+main .in{display:flex;flex-direction:column;gap:28px}
+
+/* sunday switcher */
+.sunday{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sunday .mid{text-align:center;min-width:0}
+.eyebrow{font:700 .7rem var(--font);letter-spacing:.16em;text-transform:uppercase;color:var(--red)}
+.sunday h1{font-size:clamp(1.5rem,5.5vw,2.1rem);font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.arrow{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--strong);display:grid;place-items:center;flex:none}
+.arrow:disabled{opacity:.35;cursor:default}
+.arrow svg{width:18px;height:18px}
+
+/* totals */
+.totals{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.total{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center;min-width:0}
+.total .n{font:800 clamp(1.8rem,7vw,2.6rem)/1 var(--font);color:var(--strong);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.total.red .n{color:var(--red)}
+.total .k{font:700 .66rem var(--font);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+.progress{display:flex;align-items:center;gap:12px;font-size:.85rem;color:var(--muted)}
+.track{flex:1;height:6px;border-radius:6px;background:var(--line);overflow:hidden}
+.track i{display:block;height:100%;background:var(--red);border-radius:6px;transition:width .3s}
+
+/* teams */
+.sh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+.sh h2{font-size:1.15rem;font-weight:800;text-transform:uppercase;letter-spacing:.02em}
+.sh p{margin:0;color:var(--muted);font-size:.85rem}
+.group{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.group+.group{margin-top:12px}
+.gname{font:700 .68rem var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:12px 16px 8px}
+.team{width:100%;display:grid;grid-template-columns:22px 1fr auto;gap:12px;align-items:center;text-align:left;border:0;border-top:1px solid var(--line);background:none;padding:13px 16px;color:var(--ink);font:inherit}
+.team:hover{background:var(--bg)}
+.dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center}
+.team.done .dot{background:var(--good);border-color:var(--good)}
+.team.done .dot svg{display:block}
+.dot svg{display:none;width:12px;height:12px}
+.tname{font-weight:700;color:var(--strong);min-width:0}
+.tmeta{display:block;font-size:.8rem;color:var(--muted);font-weight:500}
+.go{font:700 .72rem var(--font);letter-spacing:.08em;text-transform:uppercase;padding:7px 12px;border-radius:999px;background:var(--red);color:#fff;white-space:nowrap}
+.team.done .go{background:transparent;color:var(--muted);border:1px solid var(--line)}
+
+/* lists */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:4px 16px}
+.li{display:grid;grid-template-columns:1fr auto;gap:12px;padding:12px 0;border-top:1px solid var(--line);align-items:baseline}
+.li:first-child{border-top:0}
+.li div{min-width:0;overflow-wrap:anywhere}
+.tag{font:700 .66rem var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.story{padding:14px 0;border-top:1px solid var(--line)}
+.story:first-child{border-top:0}
+.story p{margin:0 0 6px;font-style:italic;font-weight:500;overflow-wrap:anywhere}
+.empty{color:var(--muted);font-size:.9rem;padding:14px 0}
+@media (max-width:520px){.li{grid-template-columns:1fr}}
+
+.btn{border:0;border-radius:12px;padding:14px 20px;font:700 .85rem var(--font);letter-spacing:.08em;text-transform:uppercase;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.primary{background:var(--red);color:#fff}
+.btn.primary:hover{background:var(--red-deep)}
+.btn.ghost{background:var(--surface);color:var(--strong);border:1px solid var(--line)}
+.btn.block{width:100%}
+.btn:disabled{opacity:.5;cursor:default}
+.note-bar{background:var(--red-soft);color:var(--red-deep);border-radius:12px;padding:12px 16px;font-weight:600;font-size:.9rem}
+
+/* log panel */
+.back{display:inline-flex;align-items:center;gap:6px;border:0;background:none;color:var(--muted);font:700 .78rem var(--font);letter-spacing:.08em;text-transform:uppercase;padding:0}
+.back svg{width:16px;height:16px}
+.fhead h1{font-size:clamp(1.7rem,6vw,2.3rem);font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.fhead p{margin:4px 0 0;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:14px}
+.card h3{font-size:.95rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.count-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center}
+.count-row+.count-row{border-top:1px solid var(--line);padding-top:14px}
+.count-row .lbl{font-weight:700;color:var(--strong)}
+.count-row .sub{display:block;font-size:.8rem;color:var(--muted);font-weight:500}
+.step{display:grid;grid-template-columns:42px 56px 42px;align-items:center;gap:4px}
+.step button{height:42px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--strong);font:700 1.3rem/1 var(--font)}
+.step input{text-align:center;font:800 1.5rem var(--font);color:var(--strong);border:0;background:transparent;padding:0;width:100%;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.step input::-webkit-outer-spin-button,.step input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.names{grid-column:1/-1}
+label{font:700 .72rem var(--font);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.f{display:flex;flex-direction:column;gap:6px}
+input.txt,textarea{font:15px var(--font);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
+input.txt:focus,textarea:focus{border-color:var(--red);outline:none}
+textarea{min-height:88px;resize:vertical}
+.actions{display:flex;flex-direction:column;gap:10px}
+.confirm{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center}
+.link{border:0;background:none;color:var(--muted);font:600 .85rem var(--font);text-decoration:underline;padding:6px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));background:var(--strong);color:#fff;padding:12px 18px;border-radius:12px;font:700 .85rem var(--font);z-index:20;box-shadow:0 8px 24px #0003}
+
+/* dashboard */
+.nav{display:flex;align-items:center;gap:10px}
+.navbtn{border:1px solid var(--line);background:var(--surface);color:var(--strong);font:700 .72rem var(--font);letter-spacing:.1em;text-transform:uppercase;padding:8px 12px;border-radius:999px;display:inline-flex;align-items:center;gap:6px}
+.navbtn svg{width:14px;height:14px}
+.navbtn[aria-pressed="true"]{background:var(--strong);color:#fff;border-color:var(--strong)}
+@media (max-width:420px){.app{display:none}}
+.wide{max-width:1080px}
+.dhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:14px}
+.dhead h1{font-size:clamp(1.6rem,5vw,2.2rem);font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.dhead p{margin:4px 0 0;color:var(--muted);font-size:.9rem}
+.ctrls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pills{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px}
+.pills button{border:0;background:none;color:var(--muted);font:700 .72rem var(--font);letter-spacing:.08em;text-transform:uppercase;padding:7px 12px;border-radius:999px}
+.pills button[aria-pressed="true"]{background:var(--red);color:#fff}
+.toggle{display:inline-flex;align-items:center;gap:8px;font:600 .8rem var(--font);color:var(--muted);cursor:pointer}
+.toggle input{accent-color:var(--red);width:16px;height:16px}
+.sample{background:#fff7e0;color:#7a5600;border:1px solid #f0dca0;border-radius:12px;padding:10px 14px;font-size:.85rem;font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media (max-width:760px){.kpis{grid-template-columns:1fr 1fr}}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:4px}
+.kpi .k{font:700 .66rem var(--font);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.kpi .n{font:800 clamp(1.7rem,5vw,2.4rem)/1.05 var(--font);color:var(--strong);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kpi .s{font-size:.8rem;color:var(--muted)}
+.chg{display:inline-block;font:700 .72rem var(--font);border-radius:6px;padding:1px 6px;margin-right:4px}
+.chg.up{background:var(--good-soft);color:var(--good)}
+.chg.down{background:var(--red-soft);color:var(--red)}
+.chg.flat{background:var(--bg);color:var(--muted)}
+.insights{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--red);border-radius:16px;padding:16px 18px}
+.insights h2{font-size:.95rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.insights ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.charts{display:grid;grid-template-columns:1.4fr 1fr;gap:12px}
+@media (max-width:820px){.charts{grid-template-columns:1fr}}
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;min-width:0}
+.chart h3{font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.chart svg{width:100%;height:auto;display:block;margin-top:8px}
+.leg{display:flex;gap:14px;font-size:.78rem;color:var(--muted);margin-top:6px}
+.leg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+.tablewrap{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.88rem;min-width:640px}
+th{font:700 .64rem var(--font);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:right;padding:12px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+td{padding:10px 14px;border-top:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.grp td{background:var(--bg);font:700 .66rem var(--font);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 14px}
+td.tn{font-weight:700;color:var(--strong)}
+.flag{color:var(--red);font-weight:700}
+.dim{color:var(--muted)}
+.rep{display:inline-flex;gap:2px;vertical-align:middle}
+.rep i{width:6px;height:14px;border-radius:2px;background:var(--line)}
+.rep i.on{background:var(--good)}
+.people{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:760px){.people{grid-template-columns:1fr}}
+.prow{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;border-top:1px solid var(--line);align-items:baseline}
+.prow:first-child{border-top:0}
+.prow b{color:var(--strong)}
+.prow .tag{white-space:normal;text-align:right}
+</style>
+</head>
+<body>
+
+<div class="top"><div class="in"><img class="logo" src="data:image/png;base64,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" alt="Journey Church"><div class="nav"><span class="app">Feedback Loop</span><button class="navbtn" id="to-dash" aria-pressed="false" hidden><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12V7M7 12V2M12 12V5"/></svg>Dashboard</button></div></div></div>
+
+<!-- GATE -->
+<main id="gate" hidden>
+  <form class="in" id="gate-form" style="max-width:420px;display:flex;flex-direction:column;gap:16px;padding-top:6vh">
+    <div class="fhead"><div class="eyebrow">Journey WPB</div><h1>Feedback Loop</h1><p>Enter the team code Wes shared with you.</p></div>
+    <div class="f"><label for="gate-code">Team code</label><input class="txt" id="gate-code" autocomplete="off" autocapitalize="off" required></div>
+    <div id="gate-err" class="note-bar" hidden></div>
+    <button class="btn primary block" type="submit">Continue</button>
+  </form>
+</main>
+<!-- HOME -->
+<main id="home">
+  <div class="in">
+    <div id="status" class="note-bar" hidden></div>
+
+    <div class="sunday">
+      <button class="arrow" id="prev" aria-label="Previous Sunday"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3L5 9l6 6"/></svg></button>
+      <div class="mid"><div class="eyebrow" id="eyebrow">Last Sunday</div><h1 id="date"></h1></div>
+      <button class="arrow" id="next" aria-label="Next Sunday"><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3l6 6-6 6"/></svg></button>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="totals">
+        <div class="total red"><div class="n" id="t-vol">0</div><div class="k">Served</div></div>
+        <div class="total"><div class="n" id="t-sh">0</div><div class="k">New shadows</div></div>
+        <div class="total"><div class="n" id="t-co">0</div><div class="k">Call outs</div></div>
+      </div>
+      <div class="progress"><span id="prog-txt">0 of 17 teams in</span><div class="track"><i id="prog" style="width:0"></i></div></div>
+    </div>
+
+    <section>
+      <div class="sh"><h2>Teams</h2><p>Tap your team to log it</p></div>
+      <div id="teams"></div>
+    </section>
+
+    <section>
+      <div class="sh"><h2>Wins</h2></div>
+      <div class="panel" id="l-win"></div>
+    </section>
+
+    <section>
+      <div class="sh"><h2>Stories</h2></div>
+      <div class="panel" id="l-st"></div>
+    </section>
+
+    <section>
+      <div class="sh"><h2>Get better</h2><p>Make it better next Sunday</p></div>
+      <div class="panel" id="l-bt"></div>
+    </section>
+
+    <section hidden>
+      <button class="btn ghost block" id="copy">Copy recap for Monday review</button>
+      <div id="copyfallback" hidden style="margin-top:10px"><textarea id="copytext" style="min-height:240px" aria-label="Recap text"></textarea></div>
+    </section>
+  </div>
+</main>
+
+<!-- LOG -->
+<main id="log" hidden>
+  <form class="in" id="form" autocomplete="off">
+    <button type="button" class="back" id="back"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>All teams</button>
+    <div class="fhead"><div class="eyebrow" id="f-group"></div><h1 id="f-team"></h1><p id="f-date"></p></div>
+    <div id="status2" class="note-bar" hidden></div>
+
+    <div class="card">
+      <h3>The numbers</h3>
+      <div class="count-row"><span class="lbl">Served<span class="sub">Volunteers on your team today</span></span>
+        <div class="step"><button type="button" data-for="f-vol" data-d="-1" aria-label="Minus one">−</button><input type="number" id="f-vol" min="0" inputmode="numeric" value="0" aria-label="Served"><button type="button" data-for="f-vol" data-d="1" aria-label="Plus one">+</button></div></div>
+      <div class="count-row"><span class="lbl">New shadows<span class="sub">First time trying the team</span></span>
+        <div class="step"><button type="button" data-for="f-sh" data-d="-1" aria-label="Minus one">−</button><input type="number" id="f-sh" min="0" inputmode="numeric" value="0" aria-label="New shadows"><button type="button" data-for="f-sh" data-d="1" aria-label="Plus one">+</button></div>
+        <input class="txt names" id="f-shn" placeholder="Their names" aria-label="Shadow names" hidden></div>
+      <div class="count-row"><span class="lbl">Call outs<span class="sub">Scheduled but couldn't make it</span></span>
+        <div class="step"><button type="button" data-for="f-co" data-d="-1" aria-label="Minus one">−</button><input type="number" id="f-co" min="0" inputmode="numeric" value="0" aria-label="Call outs"><button type="button" data-for="f-co" data-d="1" aria-label="Plus one">+</button></div>
+        <input class="txt names" id="f-con" placeholder="Who called out" aria-label="Who called out" hidden></div>
+    </div>
+
+    <div class="card">
+      <div class="f"><label for="f-win">Wins</label><textarea id="f-win" placeholder="What went right? One per line"></textarea></div>
+      <div class="f"><label for="f-story">Story</label><textarea id="f-story" placeholder="One moment worth retelling"></textarea></div>
+      <div class="f"><label for="f-better">Get better</label><textarea id="f-better" placeholder="What would make next Sunday better? One per line"></textarea></div>
+    </div>
+
+    <div class="actions">
+      <button type="submit" class="btn primary block" id="save">Save</button>
+      <div class="confirm" id="del-wrap" hidden>
+        <button type="button" class="link" id="del">Delete this entry</button>
+        <span id="del-confirm" class="confirm" hidden><button type="button" class="btn primary" id="del-yes">Yes, delete</button><button type="button" class="btn ghost" id="del-no">Keep it</button></span>
+      </div>
+    </div>
+  </form>
+</main>
+<!-- DASHBOARD -->
+<main id="dash" hidden>
+  <div class="in wide" style="display:flex;flex-direction:column;gap:22px">
+    <button type="button" class="back" id="dash-back"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>Sunday view</button>
+    <form class="card" id="lead-form" hidden style="max-width:460px">
+      <h3>Leader access</h3>
+      <p class="dim" style="margin:0;font-size:.88rem">The dashboard is for leaders. Enter the leader code to unlock it on this device.</p>
+      <input class="txt" id="lead-code" placeholder="Leader code" autocomplete="off" autocapitalize="off" aria-label="Leader code">
+      <div id="lead-err" class="note-bar" hidden></div>
+      <button class="btn primary" type="submit">Unlock dashboard</button>
+    </form>
+    <div id="dash-body" style="display:flex;flex-direction:column;gap:22px">
+    <div class="dhead">
+      <div><div class="eyebrow">Internal</div><h1>Dream Team Metrics</h1><p id="d-sub"></p></div>
+      <div class="ctrls">
+        <div class="pills" id="range">
+          <button data-r="4" aria-pressed="false">4 wks</button>
+          <button data-r="12" aria-pressed="true">12 wks</button>
+          <button data-r="ytd" aria-pressed="false">YTD</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="sample-on">Example data</label>
+      </div>
+    </div>
+    <div class="sample" id="sample-note" hidden>Showing made-up example numbers so you can see how the dashboard reads. Turn off "Example data" to see your real entries.</div>
+
+    <div class="kpis">
+      <div class="kpi"><span class="k">Avg served</span><span class="n" id="k-avg">0</span><span class="s" id="k-avg-s"></span></div>
+      <div class="kpi"><span class="k">New shadows</span><span class="n" id="k-sh">0</span><span class="s" id="k-sh-s"></span></div>
+      <div class="kpi"><span class="k">Call out rate</span><span class="n" id="k-co">0%</span><span class="s" id="k-co-s"></span></div>
+      <div class="kpi"><span class="k">Teams reporting</span><span class="n" id="k-rep">0%</span><span class="s" id="k-rep-s"></span></div>
+    </div>
+
+    <div class="insights"><h2>What stands out</h2><ul id="insights"></ul></div>
+
+    <div class="charts">
+      <div class="chart"><h3>Served each Sunday</h3><div id="ch-served"></div><div class="leg"><span><i style="background:var(--strong)"></i>Served</span><span><i style="background:var(--red)"></i>Average</span></div></div>
+      <div class="chart"><h3>Shadows and call outs</h3><div id="ch-sc"></div><div class="leg"><span><i style="background:var(--good)"></i>New shadows</span><span><i style="background:var(--red)"></i>Call outs</span></div></div>
+    </div>
+
+    <section>
+      <div class="sh"><h2>By team</h2><p id="t-note"></p></div>
+      <div class="tablewrap"><table><thead><tr><th>Team</th><th>Reported</th><th>Avg served</th><th>Shadows</th><th>Call outs</th><th>Call out rate</th><th>Last in</th></tr></thead><tbody id="tbody"></tbody></table></div>
+    </section>
+
+    <section>
+      <div class="sh"><h2>People to follow up with</h2></div>
+      <div class="people">
+        <div class="chart"><h3>New shadows</h3><p class="s dim" style="margin:4px 0 6px;font-size:.8rem">Next step: get them on the team.</p><div id="p-sh"></div></div>
+        <div class="chart"><h3>Repeat call outs</h3><p class="s dim" style="margin:4px 0 6px;font-size:.8rem">Called out more than once. A good time to check in.</p><div id="p-co"></div></div>
+      </div>
+    </section>
+    </div>
+  </div>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const GROUPS=[
+  {name:"Connections",teams:["New Here Start Here","Welcome Desk","Greeters","Ushers"]},
+  {name:"Operations",teams:["Parking","VST","Café"]},
+  {name:"Production",teams:["Production"]},
+  {name:"Kids Elementary",teams:["Elementary Large Group","Elementary Small Group"]},
+  {name:"Kids Early Childhood",teams:["Babies 0 to 12 Months","Babies 13 to 24 Months","2 Year Olds","3 Year Olds","4 & 5 Year Olds"]},
+  {name:"Leaders",teams:["Coaches","Student Leaders"]}
+];
+const AREAS=GROUPS.flatMap(g=>g.teams);
+const groupOf=t=>GROUPS.find(g=>g.teams.includes(t))?.name||"";
+let entries=[],week=lastSunday(),team=null,readOnly=false,isLeader=false;
+const store={get(k){try{return localStorage.getItem(k)||""}catch(_){return ""}},set(k,v){try{v?localStorage.setItem(k,v):localStorage.removeItem(k)}catch(_){}}};
+let teamCode=store.get("fl_team"),leaderCode=store.get("fl_leader");
+async function api(method,body,qs){
+  const r=await fetch("/api/entries"+(qs||""),{method,headers:{"content-type":"application/json","x-team-code":teamCode,"x-leader-code":leaderCode},body:body?JSON.stringify(body):undefined});
+  if(r.status===401)throw{code:"auth"};
+  if(!r.ok)throw{code:"fail"};
+  return r.json();
+}
+async function refresh(){
+  const d=await api("GET");entries=d.entries||[];isLeader=!!d.leader;
+  $("copy").parentElement.hidden=!isLeader;
+  if(!$("home").hidden)render();if(!$("dash").hidden)renderDash();
+}
+const $=id=>document.getElementById(id);
+const CHECK='<svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2l2.3 2.3L9.5 3.8"/></svg>';
+
+function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function lastSunday(){const d=new Date();d.setDate(d.getDate()-d.getDay());return ymd(d)}
+function parse(s){const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)}
+function shift(s,days){const d=parse(s);d.setDate(d.getDate()+days);return ymd(d)}
+function fmt(s,long){return parse(s).toLocaleDateString("en-US",long?{weekday:"long",month:"long",day:"numeric"}:{month:"short",day:"numeric"})}
+function slug(a){return a.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}
+function lines(t){return (t||"").split("\n").map(s=>s.trim()).filter(Boolean)}
+function names(t){return lines((t||"").replace(/,/g,"\n"))}
+function num(v){const n=parseInt(v,10);return isNaN(n)||n<0?0:n}
+function sum(a,k){return a.reduce((x,e)=>x+(e[k]||0),0)}
+function plural(n,w){return n+" "+w+(n===1?"":"s")}
+function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+function toast(m){const t=$("toast");t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2200)}
+function status(m){["status","status2"].forEach(id=>{$(id).textContent=m||"";$(id).hidden=!m})}
+const weekEntries=w=>entries.filter(e=>e.sunday===w);
+const entryFor=(w,t)=>entries.find(e=>e.sunday===w&&e.area===t);
+
+/* home */
+$("prev").onclick=()=>{week=shift(week,-7);render()};
+$("next").onclick=()=>{week=shift(week,7);render()};
+function render(){
+  const ls=lastSunday();
+  $("eyebrow").textContent=week===ls?"Last Sunday":week>ls?"Upcoming Sunday":"Sunday";
+  $("date").textContent=fmt(week,true);
+  $("next").disabled=week>=ls;
+  const we=weekEntries(week);
+  $("t-vol").textContent=sum(we,"volunteers");$("t-sh").textContent=sum(we,"shadows");$("t-co").textContent=sum(we,"callouts");
+  const done=AREAS.filter(a=>we.some(e=>e.area===a)).length;
+  $("prog-txt").textContent=done+" of "+AREAS.length+" teams in";$("prog").style.width=(done/AREAS.length*100)+"%";
+
+  $("teams").replaceChildren(...GROUPS.map(g=>{
+    const box=el("div","group");box.appendChild(el("div","gname",g.name));
+    g.teams.forEach(t=>{
+      const e=entryFor(week,t),b=el("button","team"+(e?" done":""));b.type="button";
+      const dot=el("span","dot");dot.innerHTML=CHECK;
+      const nm=el("span","tname",t);
+      const meta=e?[plural(e.volunteers||0,"served"),e.shadows?plural(e.shadows,"shadow"):"",e.callouts?plural(e.callouts,"call out"):""].filter(Boolean).join(" · "):"Not logged yet";
+      nm.appendChild(el("span","tmeta",meta));
+      b.append(dot,nm,el("span","go",e?"Edit":"Log"));
+      if(readOnly)b.lastChild.hidden=true;
+      b.onclick=()=>{if(!readOnly)openLog(t)};
+      box.appendChild(b);
+    });
+    return box;
+  }));
+
+  list("l-win",we.flatMap(e=>lines(e.wins).map(t=>({t,a:e.area}))),"No wins logged yet.",x=>{const r=el("div","li");r.append(el("div",null,x.t),el("span","tag",x.a));return r});
+  list("l-st",we.filter(e=>e.story&&e.story.trim()),"No stories yet.",e=>{const r=el("div","story");r.append(el("p",null,e.story.trim()),el("span","tag",e.area));return r});
+  list("l-bt",we.flatMap(e=>lines(e.better).map(t=>({t,a:e.area}))),"Nothing logged yet.",x=>{const r=el("div","li");r.append(el("div",null,x.t),el("span","tag",x.a));return r});
+}
+function list(id,items,emptyMsg,make){const box=$(id);box.replaceChildren(...(items.length?items.map(make):[el("div","empty",emptyMsg)]))}
+
+/* copy */
+$("copy").onclick=async()=>{
+  const we=weekEntries(week);const shN=we.flatMap(e=>names(e.shadowNames)),coN=we.flatMap(e=>names(e.calloutNames));
+  let t=`WPB FEEDBACK LOOP, ${fmt(week,true)}\n\nServed: ${sum(we,"volunteers")}\nNew shadows: ${sum(we,"shadows")}${shN.length?" ("+shN.join(", ")+")":""}\nCall outs: ${sum(we,"callouts")}${coN.length?" ("+coN.join(", ")+")":""}\nTeams reported: ${we.length} of ${AREAS.length}\n`;
+  const missing=AREAS.filter(a=>!we.some(e=>e.area===a));if(missing.length)t+=`Not in yet: ${missing.join(", ")}\n`;
+  const wins=we.flatMap(e=>lines(e.wins).map(x=>`• ${x} (${e.area})`));if(wins.length)t+=`\nWINS\n${wins.join("\n")}\n`;
+  const st=we.filter(e=>e.story&&e.story.trim()).map(e=>`${e.area}: ${e.story.trim()}`);if(st.length)t+=`\nSTORIES\n${st.join("\n\n")}\n`;
+  const bt=we.flatMap(e=>lines(e.better).map(x=>`• ${x} (${e.area})`));if(bt.length)t+=`\nGET BETTER\n${bt.join("\n")}\n`;
+  try{await navigator.clipboard.writeText(t);toast("Copied for Basecamp")}
+  catch(_){$("copytext").value=t;$("copyfallback").hidden=false;$("copytext").select();toast("Select all and copy")}
+};
+
+/* log */
+function syncNames(){$("f-shn").hidden=num($("f-sh").value)===0;$("f-con").hidden=num($("f-co").value)===0}
+document.querySelectorAll(".step button").forEach(b=>b.onclick=()=>{const i=$(b.dataset.for);i.value=Math.max(0,num(i.value)+Number(b.dataset.d));syncNames()});
+["f-sh","f-co"].forEach(id=>$(id).oninput=syncNames);
+function openLog(t){
+  team=t;const e=entryFor(week,t);
+  $("f-group").textContent=groupOf(t);$("f-team").textContent=t;$("f-date").textContent=fmt(week,true);
+  $("f-vol").value=e?.volunteers??0;$("f-sh").value=e?.shadows??0;$("f-co").value=e?.callouts??0;
+  $("f-shn").value=e?.shadowNames||"";$("f-con").value=e?.calloutNames||"";$("f-con").placeholder=(!isLeader&&e&&e.callouts)?"Names saved privately. Type to replace.":"Who called out";
+  $("f-win").value=e?.wins||"";$("f-story").value=e?.story||"";$("f-better").value=e?.better||"";
+  $("save").textContent=e?"Save changes":"Save";$("del-wrap").hidden=!e;$("del-confirm").hidden=true;$("del").hidden=false;
+  syncNames();status("");showView("log");
+}
+function closeLog(){showView("home");render()}
+$("back").onclick=closeLog;
+$("form").onsubmit=async ev=>{
+  ev.preventDefault();
+  const prev=entryFor(week,team);
+  const body={sunday:week,area:team,volunteers:num($("f-vol").value),shadows:num($("f-sh").value),shadowNames:$("f-shn").value.trim(),
+    callouts:num($("f-co").value),calloutNames:$("f-con").value.trim(),wins:$("f-win").value.trim(),story:$("f-story").value.trim(),better:$("f-better").value.trim(),
+    updatedAt:new Date().toISOString(),updatedBy:me||null,createdAt:prev?.createdAt||new Date().toISOString()};
+  $("save").disabled=true;
+  if(!isLeader&&prev&&prev.callouts&&!body.calloutNames)body.calloutNames=null;
+  try{await api("POST",body);toast(team+" saved. Thank you!");await refresh().catch(()=>{});closeLog()}
+  catch(e){if(e&&e.code==="auth"){showGate("Your team code changed. Enter the new one.")}
+    else status("That didn't save. Check your connection and try again.")}
+  finally{$("save").disabled=false}
+};
+$("del").onclick=()=>{$("del").hidden=true;$("del-confirm").hidden=false};
+$("del-no").onclick=()=>{$("del").hidden=false;$("del-confirm").hidden=true};
+$("del-yes").onclick=async()=>{const e=entryFor(week,team);if(!e)return;try{await api("DELETE",null,"?id="+encodeURIComponent(e.id));toast("Entry deleted");await refresh().catch(()=>{});closeLog()}catch(_){status("That didn't delete. Try again.")}};
+
+/* dashboard */
+let range=12,useSample=false,SAMPLE=null;
+function showView(v){["gate","home","log","dash"].forEach(id=>$(id).hidden=id!==v);$("to-dash").setAttribute("aria-pressed",v==="dash");window.scrollTo(0,0)}
+function dashGate(){$("lead-form").hidden=isLeader;$("dash-body").hidden=!isLeader;if(isLeader)renderDash()}
+$("to-dash").onclick=()=>{if(!$("dash").hidden){showView("home");render();return}showView("dash");dashGate()};
+$("lead-form").onsubmit=async ev=>{ev.preventDefault();const c=$("lead-code").value.trim();if(!c)return;
+  const prevLead=leaderCode;leaderCode=c;
+  try{await api("GET",null,"?check=leader");store.set("fl_leader",c);$("lead-err").hidden=true;await refresh();dashGate()}
+  catch(_){leaderCode=prevLead;$("lead-err").textContent="That code didn't work. Check with Wes.";$("lead-err").hidden=false}};
+$("dash-back").onclick=()=>{showView("home");render()};
+document.querySelectorAll("#range button").forEach(b=>b.onclick=()=>{range=b.dataset.r==="ytd"?"ytd":Number(b.dataset.r);document.querySelectorAll("#range button").forEach(x=>x.setAttribute("aria-pressed",x===b));renderDash()});
+$("sample-on").onchange=()=>{useSample=$("sample-on").checked;$("sample-note").hidden=!useSample;renderDash()};
+function rangeWeeks(){
+  const ls=lastSunday();let n=range;
+  if(range==="ytd"){const j=new Date(parse(ls).getFullYear(),0,1);while(j.getDay()!==0)j.setDate(j.getDate()+1);n=Math.round((parse(ls)-j)/6048e5)+1}
+  const out=[];for(let i=n-1;i>=0;i--)out.push(shift(ls,-7*i));return out;
+}
+function makeSample(){
+  let x=7;const r=()=>{x=(x*16807)%2147483647;return x/2147483647};
+  const first=["Ava","Marcus","Jenna","Luis","Tasha","Ben","Grace","Omar","Kayla","Drew","Nia","Sam","Elena","Chris","Maya","Jordan"];
+  const base={"New Here Start Here":4,"Welcome Desk":5,"Greeters":12,"Ushers":10,"Parking":14,"VST":6,"Café":8,"Production":9,"Elementary Large Group":7,"Elementary Small Group":11,"Babies 0 to 12 Months":4,"Babies 13 to 24 Months":4,"2 Year Olds":5,"3 Year Olds":5,"4 & 5 Year Olds":6,"Coaches":5,"Student Leaders":8};
+  const out=[],ls=lastSunday();
+  for(let w=0;w<20;w++){const sun=shift(ls,-7*w);AREAS.forEach(t=>{if(r()<.15)return;const b=base[t]||6;
+    const sh=r()<.3?1+(r()<.25?1:0):0,co=r()<.35?1+(r()<.2?1:0):0;
+    const pick=k=>Array.from({length:k},()=>first[Math.floor(r()*first.length)]).join(", ");
+    out.push({sunday:sun,area:t,volunteers:Math.max(1,Math.round(b+(r()-.4)*4+(19-w)*.08)),shadows:sh,shadowNames:sh?pick(sh):"",callouts:co,calloutNames:co?pick(co):""})})}
+  return out;
+}
+function pct(a,b){return b?Math.round(a/b*100):0}
+function chg(cur,prev,invert){
+  if(!prev)return "";const d=Math.round((cur-prev)/prev*100);
+  const cls=d===0?"flat":(d>0)!==!!invert?"up":"down";
+  return `<span class="chg ${cls}">${d>0?"+":""}${d}%</span>`;
+}
+function bars(id,weeks,series,opts){
+  const W=600,H=200,pl=30,pr=6,pt=16,pb=24,max=Math.max(opts.min||5,...series.flatMap(s=>s.vals));
+  const nice=Math.ceil(max/ (max>20?10:5))*(max>20?10:5);
+  const y=v=>pt+(H-pt-pb)*(1-v/nice),cw=(W-pl-pr)/weeks.length,gw=cw*.7,bw=gw/series.length;
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${opts.label}">`;
+  [0,.5,1].forEach(f=>{const v=Math.round(nice*f),yy=y(v);s+=`<line x1="${pl}" x2="${W-pr}" y1="${yy}" y2="${yy}" stroke="var(--line)"/><text x="${pl-6}" y="${yy+4}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="Montserrat,Arial">${v}</text>`});
+  const step=Math.ceil(weeks.length/8);
+  weeks.forEach((w,i)=>{const x0=pl+i*cw+(cw-gw)/2;
+    series.forEach((se,j)=>{const v=se.vals[i];if(v>0)s+=`<rect x="${x0+j*bw+.5}" y="${y(v)}" width="${Math.max(1,bw-1)}" height="${H-pb-y(v)}" rx="2" fill="${se.color}"><title>${fmt(w)}: ${v}</title></rect>`});
+    if(i%step===0||i===weeks.length-1)s+=`<text x="${x0+gw/2}" y="${H-7}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="Montserrat,Arial">${fmt(w)}</text>`});
+  if(opts.avg!=null&&opts.avg>0){const yy=y(opts.avg);s+=`<line x1="${pl}" x2="${W-pr}" y1="${yy}" y2="${yy}" stroke="var(--red)" stroke-width="1.5" stroke-dasharray="4 4"/>`}
+  $(id).innerHTML=s+"</svg>";
+}
+function renderDash(){
+  if(useSample&&!SAMPLE)SAMPLE=makeSample();
+  const all=useSample?SAMPLE:entries,weeks=rangeWeeks(),set=new Set(weeks);
+  const E=all.filter(e=>set.has(e.sunday));
+  const per=weeks.map(w=>{const we=E.filter(e=>e.sunday===w);return{w,v:sum(we,"volunteers"),s:sum(we,"shadows"),c:sum(we,"callouts"),n:we.length}});
+  const active=per.filter(p=>p.n);
+  $("d-sub").textContent=`${fmt(weeks[0])} to ${fmt(weeks[weeks.length-1])} · ${active.length} of ${weeks.length} Sundays with entries`;
+  const avg=active.length?Math.round(sum(active,"v")/active.length):0;
+  const totSh=sum(per,"s"),totCo=sum(per,"c"),totV=sum(per,"v");
+  const coRate=pct(totCo,totV+totCo),repRate=active.length?pct(sum(active,"n"),active.length*AREAS.length):0;
+  // halves for change
+  const h=Math.floor(per.length/2),A=per.slice(0,h).filter(p=>p.n),B=per.slice(h).filter(p=>p.n);
+  const av=a=>a.length?sum(a,"v")/a.length:0;
+  $("k-avg").textContent=avg;$("k-avg-s").innerHTML=(A.length&&B.length?chg(av(B),av(A)):"")+"per Sunday";
+  $("k-sh").textContent=totSh;$("k-sh-s").innerHTML=(A.length&&B.length?chg(sum(B,"s"),sum(A,"s")):"")+"tried a team";
+  $("k-co").textContent=coRate+"%";$("k-co-s").textContent=totCo+" call outs in this period";
+  $("k-rep").textContent=repRate+"%";$("k-rep-s").textContent="of teams log each Sunday";
+
+  bars("ch-served",weeks,[{vals:per.map(p=>p.v),color:"var(--strong)"}],{avg,label:"Volunteers served each Sunday"});
+  bars("ch-sc",weeks,[{vals:per.map(p=>p.s),color:"var(--good)"},{vals:per.map(p=>p.c),color:"var(--red)"}],{min:4,label:"New shadows and call outs each Sunday"});
+
+  // team table
+  const stats=AREAS.map(t=>{const te=E.filter(e=>e.area===t);const v=sum(te,"volunteers"),c=sum(te,"callouts");
+    const last=te.map(e=>e.sunday).sort().pop();
+    return{t,n:te.length,avg:te.length?Math.round(v/te.length):0,s:sum(te,"shadows"),c,rate:pct(c,v+c),last,weeks:weeks.slice(-8).map(w=>te.some(e=>e.sunday===w))}});
+  const tb=$("tbody");tb.replaceChildren();
+  GROUPS.forEach(g=>{
+    const gr=document.createElement("tr");gr.className="grp";const gc=document.createElement("td");gc.colSpan=7;gc.textContent=g.name;gr.appendChild(gc);tb.appendChild(gr);
+    g.teams.forEach(t=>{const st=stats.find(x=>x.t===t),tr=document.createElement("tr");
+      const td=(txt,cls)=>{const c=document.createElement("td");if(cls)c.className=cls;c.textContent=txt;return c};
+      tr.appendChild(td(t,"tn"));
+      const rc=document.createElement("td");const rep=el("span","rep");st.weeks.forEach(on=>rep.appendChild(el("i",on?"on":"")));rc.append(rep," "+st.n+"/"+weeks.length);tr.appendChild(rc);
+      tr.appendChild(td(st.n?st.avg:"·",st.n?"":"dim"));
+      tr.appendChild(td(st.s,st.s?"":"dim"));
+      tr.appendChild(td(st.c,st.c?"":"dim"));
+      tr.appendChild(td(st.n?st.rate+"%":"·",st.rate>=15?"flag":st.n?"":"dim"));
+      tr.appendChild(td(st.last?fmt(st.last):"Never","dim"));
+      tb.appendChild(tr)})});
+  $("t-note").textContent="Bars show the last 8 Sundays. Red call out rate means 15% or higher.";
+
+  // people
+  const shL=[];E.forEach(e=>names(e.shadowNames).forEach(n=>shL.push({n,t:e.area,w:e.sunday})));shL.sort((a,b)=>b.w.localeCompare(a.w));
+  plist("p-sh",shL.slice(0,12),"No shadows logged in this period.",p=>[p.n,p.t+", "+fmt(p.w)]);
+  const coM={};E.forEach(e=>names(e.calloutNames).forEach(n=>{const k=n.toLowerCase()+"|"+e.area;(coM[k]=coM[k]||{n,t:e.area,c:0,last:""}).c++;if(e.sunday>coM[k].last)coM[k].last=e.sunday}));
+  const rep=Object.values(coM).filter(x=>x.c>1).sort((a,b)=>b.c-a.c);
+  plist("p-co",rep.slice(0,12),"Nobody has called out more than once. Love that.",p=>[p.n,p.c+" times, "+p.t]);
+
+  // insights
+  const ins=[];
+  if(!active.length)ins.push("No entries in this period yet. Once teams start logging on Sundays, this fills in on its own.");
+  else{
+    if(A.length&&B.length){const d=Math.round((av(B)-av(A))/(av(A)||1)*100);ins.push(d>=3?`Served is up ${d}% in the second half of this period. Momentum is building.`:d<=-3?`Served is down ${Math.abs(d)}% in the second half of this period. Worth a look at scheduling.`:`Served is holding steady at about ${avg} a Sunday.`)}
+    const hi=stats.filter(s=>s.c>=2).sort((a,b)=>b.rate-a.rate)[0];if(hi)ins.push(`${hi.t} has the highest call out rate at ${hi.rate}%. A good team to check in with.`);
+    const noSh=stats.filter(s=>s.n&&!s.s).map(s=>s.t);if(noSh.length)ins.push(`No new shadows yet on ${noSh.slice(0,4).join(", ")}${noSh.length>4?" and "+(noSh.length-4)+" more":""}. These teams could use an invite push.`);
+    const gone=stats.filter(s=>!weeks.slice(-2).some(w=>E.some(e=>e.sunday===w&&e.area===s.t))).map(s=>s.t);if(gone.length)ins.push(`Not logged the last 2 Sundays: ${gone.slice(0,5).join(", ")}${gone.length>5?" and "+(gone.length-5)+" more":""}.`);
+    const top=stats.slice().sort((a,b)=>b.s-a.s)[0];if(top&&top.s)ins.push(`${top.t} brought in the most new shadows (${top.s}). Celebrate that team lead.`);
+  }
+  $("insights").replaceChildren(...ins.map(t=>el("li",null,t)));
+}
+function plist(id,items,emptyMsg,f){$(id).replaceChildren(...(items.length?items.map(p=>{const [a,b]=f(p),r=el("div","prow");r.append(el("b",null,a),el("span","tag",b));return r}):[el("div","empty",emptyMsg)]))}
+
+/* boot */
+function showGate(msg){showView("gate");$("gate-err").textContent=msg||"";$("gate-err").hidden=!msg;$("gate-code").focus()}
+$("gate-form").onsubmit=async ev=>{ev.preventDefault();teamCode=$("gate-code").value.trim();
+  try{await refresh();store.set("fl_team",teamCode);showView("home");render()}
+  catch(e){showGate(e.code==="auth"?"That code didn't work. Check with Wes.":"Can't reach the server. Try again in a moment.")}};
+$("to-dash").hidden=false;
+render();
+(async()=>{
+  if(!teamCode){showGate();return}
+  try{await refresh();render()}
+  catch(e){if(e.code==="auth"){leaderCode="";store.set("fl_leader","");showGate("Enter your team code to continue.")}else status("Can't reach the server right now. Pull to refresh in a moment.")}
+  setInterval(()=>{if(document.visibilityState==="visible"&&$("log").hidden)refresh().catch(()=>{})},30000);
+})();
+</script>
+
+</body>
+</html>
